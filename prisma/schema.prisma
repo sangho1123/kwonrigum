@@ -1,0 +1,121 @@
+// prisma/schema.prisma
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN
+  CLIENT
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String   // '?'를 제거하여 필수값으로 변경
+  phone     String?  // 본인인증 시 받아올 연락처
+  isVerified Boolean @default(false) // 실명(본인) 인증 여부
+  password  String
+  role      Role     @default(CLIENT)
+  createdAt DateTime @default(now())
+
+  threads   Thread[]
+  listings  Listing[]
+  favorites Favorite[] // 찜한 매물 목록 (1:N)
+}
+
+model Listing {
+  id             Int       @id @default(autoincrement())
+  ownerId        String?
+  owner          User?     @relation(fields: [ownerId], references: [id])
+  description    String?
+  title          String
+  category       String
+  address_area   String?
+  address_full   String?   // 상세 주소 추가
+  rent_monthly   Int?
+  deposit        Int?
+  goodwill_price Int?
+  monthly_sales  Int?
+  parking_spaces Int?
+  
+  // 위치 정보
+  lat            Float?
+  lng            Float?
+
+  // 인증 및 서류 관련 필드 추가
+  isRevenueVerified       Boolean @default(false) // 매출 인증
+  isBuildingLedgerVerified Boolean @default(false) // 건축물대장 인증
+  isRegistryVerified      Boolean @default(false) // 등기부등본 인증
+  
+  revenueProofUrl    String? // 매출 증빙
+  buildingLedgerUrl  String? // 건축물대장 파일
+  registryUrl        String? // 등기부등본 파일
+
+  photos         Json?
+  createdAt      DateTime  @default(now())
+  favoritedBy    Favorite[] // 이 매물을 찜한 유저 목록 (1:N)
+
+  threads        Thread[]
+
+  @@index([ownerId])
+}
+
+model Thread {
+  id              String    @id @default(cuid())
+  type            String
+  title           String?
+  listingId       Int?
+  userId          String?
+  createdAt       DateTime  @default(now())
+  lastAdminReadAt DateTime?
+  lastUserReadAt  DateTime?
+  
+  user     User?    @relation(fields: [userId], references: [id])
+  listing  Listing? @relation(fields: [listingId], references: [id])
+  messages Message[]
+}
+
+model Message {
+  id       String   @id @default(cuid())
+  threadId String
+  from     String
+  text     String
+  at       DateTime @default(now())
+  thread   Thread   @relation(fields: [threadId], references: [id], onDelete: Cascade)
+
+  @@index([threadId, at])
+}
+
+model Lead {
+  id        String   @id @default(cuid())
+  type      String   
+  listingId Int?
+  name      String
+  phone     String
+  message   String?
+  payload   Json?
+  partnerId String?
+  createdAt DateTime @default(now())
+}
+
+// 💡 찜하기(관심 매물)를 위한 새로운 테이블 추가
+model Favorite {
+  id        String   @id @default(cuid())
+  userId    String
+  listingId Int
+  createdAt DateTime @default(now())
+
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  listing   Listing  @relation(fields: [listingId], references: [id], onDelete: Cascade)
+
+  // 한 유저가 같은 매물을 중복해서 찜할 수 없도록 고유키 설정
+  @@unique([userId, listingId])
+  @@index([userId])
+  @@index([listingId])
+}
