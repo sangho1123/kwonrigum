@@ -1,0 +1,13 @@
+{
+  "/analysis/page": "app/analysis/page.js",
+  "/api/auth/[...nextauth]/route": "app/api/auth/[...nextauth]/route.js",
+  "/api/chat/threads/[id]/route": "app/api/chat/threads/[id]/route.js",
+  "/api/chat/threads/route": "app/api/chat/threads/route.js",
+  "/api/listings/[id]/route": "app/api/listings/[id]/route.js",
+  "/calculator/page": "app/calculator/page.js",
+  "/chat/[id]/page": "app/chat/[id]/page.js",
+  "/listing/[id]/page": "app/listing/[id]/page.js",
+  "/listing/new/page": "app/listing/new/page.js",
+  "/mypage/page": "app/mypage/page.js",
+  "/page": "app/page.js"
+}

@@ -201,8 +201,13 @@ export default function ListingDetailPage({ params }: { params: Promise<{ id: st
               </div>
 
               <Link 
+<<<<<<< HEAD
               href={`/analysis?lat=${listing.lat ?? 37.4979}&lng=${listing.lng ?? 127.0276}&address=${encodeURIComponent(listing.address_area || "서울")}&category=${encodeURIComponent(listing.category || "일반업종")}`}
               className="block w-full mt-4"
+=======
+                href={`/analysis?address=${encodeURIComponent(listing.address_area || "서울")}&category=${encodeURIComponent(listing.category || "일반업종")}`}
+                className="block w-full mt-4"
+>>>>>>> 29451efc4fb24432e8003cc114e00a91b168e065
               >
                 <div className="border border-indigo-200 bg-indigo-50 hover:bg-indigo-100 p-4 rounded-2xl flex items-center justify-between transition group cursor-pointer">
                   <div>
