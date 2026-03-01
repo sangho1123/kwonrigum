@@ -1,17 +1,15 @@
 "use client";
 
-<<<<<<< HEAD
 import { useEffect, useRef } from "react";
 
 interface Props {
   lat: number;
   lng: number;
   realStores?: any[];
-  popMap?: Record<string, number>; // 백엔드에서 받은 1,671개 유동인구 데이터
+  popMap?: Record<string, number>;
   onAreaClick?: (name: string, code: string, pop: number) => void;
 }
 
-// 💡 매물 좌표가 어떤 다각형(상권) 안에 있는지 검사하는 수학 알고리즘 (Ray-casting)
 const isPointInPolygon = (point: number[], coords: any[], type: string) => {
   const rayCast = (pt: number[], polygon: any[]) => {
     let inside = false;
@@ -24,7 +22,6 @@ const isPointInPolygon = (point: number[], coords: any[], type: string) => {
     }
     return inside;
   };
-
   if (type === 'Polygon') return rayCast(point, coords[0]);
   if (type === 'MultiPolygon') {
     for (let poly of coords) {
@@ -38,247 +35,105 @@ export default function AnalysisMap({ lat, lng, realStores = [], popMap = {}, on
   const mapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    // popMap(전체 데이터)이 로드되지 않았다면 아직 지도를 그리지 않음
-    if (!mapRef.current || !window.naver || Object.keys(popMap).length === 0) return;
+    if (!mapRef.current || !window.naver) return;
 
+    const latNum = Number(lat);
+    const lngNum = Number(lng);
+    if (isNaN(latNum) || isNaN(lngNum)) return;
+
+    const center = new window.naver.maps.LatLng(latNum, lngNum);
     const map = new window.naver.maps.Map(mapRef.current, {
-      center: new window.naver.maps.LatLng(lat, lng),
+      center: center,
       zoom: 15,
+      zoomControl: true,
     });
 
-    // 매물 위치 마커
+    // 매물 마커
     new window.naver.maps.Marker({
-      position: new window.naver.maps.LatLng(lat, lng),
+      position: center,
       map: map,
       icon: {
-        content: `<div style="padding: 6px 12px; background: #EF4444; color: white; border-radius: 8px; font-weight: bold; font-size: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 2px solid white;">📍 매물 위치</div>`,
+        content: `<div style="padding: 6px 12px; background: #EF4444; color: white; border-radius: 8px; font-weight: bold; font-size: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.3); border: 2px solid white;">📍 분석 위치</div>`,
         anchor: new window.naver.maps.Point(40, 15),
       }
     });
 
-    // 경쟁 업체 마커
-    if (realStores.length > 0) {
+    // 상가 점포 마커 (노란 점)
+    if (realStores && realStores.length > 0) {
       realStores.forEach((store) => {
         if (store.lat && store.lon) {
           new window.naver.maps.Marker({
             position: new window.naver.maps.LatLng(store.lat, store.lon),
             map: map,
             icon: {
-              content: `<div style="width: 14px; height: 14px; background: #F59E0B; border-radius: 50%; border: 2px solid white; box-shadow: 0 2px 4px rgba(0,0,0,0.2);"></div>`,
-              anchor: new window.naver.maps.Point(7, 7),
+              content: `<div style="width: 8px; height: 8px; background: #F59E0B; border-radius: 50%; border: 1px solid white; opacity: 0.9;"></div>`,
+              anchor: new window.naver.maps.Point(4, 4),
             }
           });
         }
       });
     }
 
-    // GeoJSON 로드 및 처리
+    // 폴리곤 로드 및 색칠
     fetch('/data/seoul_commercial_areas.geojson')
       .then(res => res.json())
       .then(geojson => {
         map.data.addGeoJson(geojson);
 
-        // 💡 1. 데이터 기반 스타일링 (Data-Driven Styling) - 유동인구 수에 따라 색칠
         map.data.setStyle((feature: any) => {
-          const areaCode = feature.getProperty('TRDAR_CD');
+          // 💡 핵심 수정: 타입을 String으로 강제 변환하여 매칭 확률 100% 보장
+          const areaCode = String(feature.getProperty('TRDAR_CD'));
           const pop = popMap[areaCode] || 0;
 
-          // 유동인구 구간별 색상 설정 (히트맵 효과)
-          let color = '#3B82F6'; // 파란색 (여유, 50만 미만)
-          if (pop >= 1500000) color = '#E11D48'; // 짙은 빨강 (초밀집, 150만 이상)
-          else if (pop >= 1000000) color = '#EF4444'; // 빨강 (밀집, 100만 이상)
-          else if (pop >= 500000) color = '#F59E0B'; // 주황 (보통, 50만 이상)
+          // 데이터가 있으면 빨강~파랑, 없으면 회색
+          let color = '#9CA3AF'; // 데이터 없음 (회색)
+          if (pop >= 1000000) color = '#DC2626'; // 초밀집 (빨강)
+          else if (pop >= 500000) color = '#EA580C'; // 밀집 (주황)
+          else if (pop >= 200000) color = '#F59E0B'; // 보통 (노랑)
+          else if (pop > 0) color = '#3B82F6'; // 여유 (파랑)
 
           return {
             fillColor: color,
-            fillOpacity: 0.35, // 색상이 보이도록 투명도 조절
+            fillOpacity: pop > 0 ? 0.35 : 0.1, // 데이터 있으면 진하게
             strokeColor: color,
-            strokeWeight: 1,
+            strokeWeight: pop > 0 ? 2 : 1,
             strokeOpacity: 0.8,
+            clickable: true,
           };
         });
 
-        // 마우스 오버/아웃 효과
-        map.data.addListener('mouseover', (e: any) => map.data.overrideStyle(e.feature, { fillOpacity: 0.7, strokeWeight: 3 }));
-        map.data.addListener('mouseout', (e: any) => map.data.revertStyle(e.feature));
-
-        // 💡 2. 매물이 속한 상권 자동 찾기 로직
-        const pt = [lng, lat]; // GeoJSON은 [경도, 위도] 순서 사용
-        let targetFeature: any = null;
-
+        // 자동 탐색 로직
+        const pt = [lngNum, latNum];
+        let found = false;
+        
         geojson.features.forEach((feature: any) => {
-          const coords = feature.geometry.coordinates;
-          const type = feature.geometry.type;
-          // 광선 투사 알고리즘으로 매물이 이 다각형 안에 있는지 검사
-          if (isPointInPolygon(pt, coords, type)) {
-            targetFeature = feature;
+          if (isPointInPolygon(pt, feature.geometry.coordinates, feature.geometry.type)) {
+            found = true;
+            if (onAreaClick) {
+              const name = feature.properties.TRDAR_CD_N || feature.properties.TRDAR_NM;
+              const code = String(feature.properties.TRDAR_CD); // 여기도 String 변환
+              const pop = popMap[code] || 0;
+              onAreaClick(name, code, pop);
+            }
           }
         });
 
-        // 매물이 특정 상권 안에 있다면 즉시 부모 컴포넌트로 데이터 전송 (초기화면 세팅)
-        if (targetFeature && onAreaClick) {
-          const areaName = targetFeature.properties.TRDAR_CD_N || targetFeature.properties.TRDAR_NM;
-          const areaCode = targetFeature.properties.TRDAR_CD;
-          const areaPop = popMap[areaCode] || 0;
-          onAreaClick(areaName, areaCode, areaPop);
+        if (!found) {
+          console.warn("해당 좌표가 서울시 상권 폴리곤 내부에 있지 않습니다.");
         }
 
-        // 💡 3. 클릭 이벤트 (사용자가 다른 영역을 클릭할 때)
-        const infoWindow = new window.naver.maps.InfoWindow({
-          backgroundColor: "transparent", borderWidth: 0, disableAnchor: true, pixelOffset: new window.naver.maps.Point(0, -15),
-        });
-
+        // 클릭 이벤트
         map.data.addListener('click', (e: any) => {
-          const areaName = e.feature.getProperty('TRDAR_CD_N') || e.feature.getProperty('TRDAR_NM');
-          const areaCode = e.feature.getProperty('TRDAR_CD');
-          const areaPop = popMap[areaCode] || 0;
+          const name = e.feature.getProperty('TRDAR_CD_N') || e.feature.getProperty('TRDAR_NM');
+          const code = String(e.feature.getProperty('TRDAR_CD'));
+          const pop = popMap[code] || 0;
           
-          if (onAreaClick) onAreaClick(areaName, areaCode, areaPop);
-          
-          infoWindow.setContent(`
-            <div style="padding: 10px 15px; background: white; border-radius: 8px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); border: 1px solid #e5e7eb;">
-              <p style="font-weight: 900; color: #111827; margin: 0; font-size: 14px;">🏘️ ${areaName}</p>
-              <p style="font-size: 11px; color: #EF4444; margin: 4px 0 0 0; font-weight: bold;">유동인구: ${areaPop.toLocaleString()}명</p>
-            </div>
-          `);
-          infoWindow.setPosition(e.coord);
-          infoWindow.open(map);
+          if (onAreaClick) onAreaClick(name, code, pop);
         });
-
       })
-      .catch(err => console.error("GeoJSON 로드 실패:", err));
+      .catch(err => console.error("GeoJSON Load Fail:", err));
 
-  // popMap 객체가 변경될 때마다 지도를 다시 그립니다.
-  }, [lat, lng, realStores, popMap, onAreaClick]); 
+  }, [lat, lng, realStores, popMap]); // 의존성 배열
 
-  return <div ref={mapRef} className="w-full h-full bg-gray-100" />;
-=======
-import Script from "next/script";
-import { useEffect, useRef, useState } from "react";
-
-declare global {
-  interface Window {
-    naver: any;
-  }
-}
-
-// 🔥 lat, lng props 추가 및 선택적(optional)으로 변경
-interface AnalysisMapProps {
-  showPopulation?: boolean;
-  showCompetitors?: boolean;
-  lat?: number;
-  lng?: number;
-}
-
-export default function AnalysisMap({ 
-  showPopulation = true, 
-  showCompetitors = true,
-  lat = 37.498095, // 기본값 강남역
-  lng = 127.027610 
-}: AnalysisMapProps) {
-  const mapElement = useRef<HTMLDivElement>(null);
-  const mapRef = useRef<any>(null);
-  const overlaysRef = useRef<any[]>([]);
-  const [isMapLoaded, setIsMapLoaded] = useState(false);
-
-  const initMap = () => {
-    if (!mapElement.current || !window.naver || !window.naver.maps) return;
-    if (mapRef.current) return;
-
-    const location = new window.naver.maps.LatLng(lat, lng);
-    const mapOptions = {
-      center: location,
-      zoom: 15,
-      zoomControl: true,
-    };
-
-    mapRef.current = new window.naver.maps.Map(mapElement.current, mapOptions);
-    setIsMapLoaded(true);
-  };
-
-  const updateOverlays = () => {
-    if (!mapRef.current || !window.naver) return;
-
-    // 기존 오버레이(원, 마커) 삭제
-    overlaysRef.current.forEach((overlay) => overlay.setMap(null));
-    overlaysRef.current = [];
-
-    // 💡 핵심: 넘어온 lat, lng(해당 매물의 위치)를 중심으로 가상 데이터 동적 생성
-    const DYNAMIC_POPULATION = [
-      { lat: lat + 0.001, lng: lng + 0.001, intensity: 90 },
-      { lat: lat - 0.001, lng: lng - 0.001, intensity: 80 },
-      { lat: lat + 0.002, lng: lng - 0.001, intensity: 60 },
-      { lat: lat - 0.001, lng: lng + 0.002, intensity: 40 },
-      { lat: lat, lng: lng, intensity: 100 }, // 정중앙
-      { lat: lat + 0.003, lng: lng + 0.003, intensity: 30 },
-      { lat: lat - 0.002, lng: lng - 0.002, intensity: 50 },
-    ];
-
-    const DYNAMIC_COMPETITORS = [
-      { id: 1, name: "경쟁점포 A", lat: lat + 0.0005, lng: lng + 0.0005 },
-      { id: 2, name: "경쟁점포 B", lat: lat - 0.0015, lng: lng - 0.0015 },
-      { id: 3, name: "경쟁점포 C", lat: lat + 0.0025, lng: lng - 0.0005 },
-      { id: 4, name: "경쟁점포 D", lat: lat - 0.0005, lng: lng + 0.0025 },
-    ];
-
-    // 유동인구 히트맵 렌더링
-    if (showPopulation) {
-      DYNAMIC_POPULATION.forEach((data) => {
-        const color = data.intensity > 80 ? "#FF0000" : data.intensity > 50 ? "#FFA500" : "#00FF00";
-        const circle = new window.naver.maps.Circle({
-          map: mapRef.current,
-          center: new window.naver.maps.LatLng(data.lat, data.lng),
-          radius: 150,
-          fillColor: color,
-          fillOpacity: 0.4,
-          strokeColor: color,
-          strokeOpacity: 0.8,
-          strokeWeight: 1,
-        });
-        overlaysRef.current.push(circle);
-      });
-    }
-
-    // 경쟁 업체 마커 렌더링
-    if (showCompetitors) {
-      DYNAMIC_COMPETITORS.forEach((store) => {
-        const marker = new window.naver.maps.Marker({
-          position: new window.naver.maps.LatLng(store.lat, store.lng),
-          map: mapRef.current,
-          title: store.name,
-          icon: {
-            content: `<div style="padding:5px; background:white; border:1px solid #333; border-radius:5px; font-size:12px; font-weight:bold; box-shadow: 2px 2px 5px rgba(0,0,0,0.2);">☕ ${store.name}</div>`,
-            anchor: new window.naver.maps.Point(10, 10),
-          },
-        });
-        overlaysRef.current.push(marker);
-      });
-    }
-  };
-
-  useEffect(() => {
-    if (window.naver && window.naver.maps) {
-      initMap();
-    }
-  }, []);
-
-  useEffect(() => {
-    if (isMapLoaded && mapRef.current) {
-      // 매물 위치(lat, lng)가 바뀌면 지도 중심을 이동시키고 오버레이를 다시 그림
-      mapRef.current.setCenter(new window.naver.maps.LatLng(lat, lng));
-      updateOverlays();
-    }
-  }, [isMapLoaded, showPopulation, showCompetitors, lat, lng]);
-
-  return (
-    <>
-      <Script
-        strategy="afterInteractive"
-        src={`https://openapi.map.naver.com/openapi/v3/maps.js?ncpClientId=${process.env.NEXT_PUBLIC_NAVER_MAP_CLIENT_ID}`}
-        onReady={initMap}
-      />
-      <div ref={mapElement} className="w-full h-full rounded-lg shadow-inner" />
-    </>
-  );
->>>>>>> 29451efc4fb24432e8003cc114e00a91b168e065
+  return <div ref={mapRef} className="w-full h-full bg-gray-100 rounded-xl" />;
 }
